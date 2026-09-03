@@ -1,5 +1,5 @@
 # 酷狗概念版签到
-【在原项目基础上对齐 KuGouMusicApi v1.5.1】
+【对齐上游 KuGouMusicApi v1.6.0】
 
 GitHub Actions 实现 `酷狗概念VIP` 自动签到，每天领取总计 `两天酷狗概念VIP`
 
@@ -37,6 +37,8 @@ GitHub Actions 实现 `酷狗概念VIP` 自动签到，每天领取总计 `两�
 > 
 > **在仓库`Settings`设置`PAT Secret`，再执行登录 确保`Secrets and variables` - `Actions`中成功写入`USERINFO`再执行签到**
 
+$${\color{red}避免将PAT秘钥复制于Windows记事本中，可能存在的字号字体问题会导致秘钥中所有下划线消失导致秘钥出错}$$
+
 <details>
 
 <summary>⚠️部署教程(点击展开)⚠️</summary>
@@ -71,6 +73,8 @@ GitHub Actions 实现 `酷狗概念VIP` 自动签到，每天领取总计 `两�
    3.2 手机号登录
 
    添加手机号到 Secret `PHONE`，运行 Actions `手机号登录`，操作步骤选择「发送验证码」获取验证码，把验证码添加到 Secret `CODE`；再次运行 Actions `手机号登录`，操作步骤选择「登录」即可。
+
+   ⬆️ $${\color{red}与上文给仓库添加PAT秘钥同一位置}$$ ⬆️
 
 1. 启用 Actions `签到`，每天北京时间 01:10 自动签到（可在 `签到.yml` 中设置 cron）。启用 Actions `仓库保活` 以保证签到可以长期执行。
 
