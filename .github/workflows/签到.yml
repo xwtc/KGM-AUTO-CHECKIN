@@ -1,23 +1,62 @@
 name: 签到
+
 on:
   schedule:
-    # GitHub Actions 的 schedule 只支持 UTC，不支持 timezone 字段。
-    # UTC 17:10 = 北京时间 01:10（次日）
+    # GitHub Actions 的 schedule 默认按 UTC 计算（也可写 IANA timezone 字段）。
+    # 主时段：UTC 17:10 = 北京时间 01:10（次日）
     - cron: "10 17 * * *"
+    # 备用时段：UTC 23:20 = 北京时间 07:20
+    # 仅当「北京时间当天尚无成功签到」时才执行（见下方 gate 步骤），
+    # 用于兜底主时段被 GitHub 丢触发/失败的情况；脚本本身幂等，重复执行安全。
+    - cron: "20 23 * * *"
   workflow_dispatch:
+
+# 避免主/备时段因调度延迟而重叠，导致两个签到进程并发
+concurrency:
+  group: kgcheckin
+  cancel-in-progress: false
 
 permissions:
   contents: read
-  actions: write
+  actions: read
+
 jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: 判断本次是否需要执行
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          # 默认执行：任何异常都退回「执行」，避免误跳过导致漏签
+          echo "run=true" >> "$GITHUB_OUTPUT"
+
+          # 仅备用时段需要判断当天是否已成功签到
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "${{ github.event.schedule }}" = "20 23 * * *" ]; then
+            today=$(TZ=Asia/Shanghai date +%F)
+            found=false
+            while read -r ts; do
+              [ -z "$ts" ] && continue
+              d=$(TZ=Asia/Shanghai date -d "$ts" +%F 2>/dev/null)
+              if [ "$d" = "$today" ]; then found=true; break; fi
+            done < <(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$GITHUB_WORKFLOW" \
+                        --event schedule --status success --limit 30 --json createdAt --jq '.[].createdAt')
+            if [ "$found" = "true" ]; then
+              echo "北京时间 $today 已有成功签到，本次备用时段跳过"
+              echo "run=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+          exit 0
+
       - name: 检出仓库
+        if: steps.gate.outputs.run == 'true'
         uses: actions/checkout@v6
 
       - name: 创建 Node 环境
+        if: steps.gate.outputs.run == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: 24
@@ -25,6 +64,7 @@ jobs:
           cache-dependency-path: ./api/package-lock.json
 
       - name: 缓存依赖
+        if: steps.gate.outputs.run == 'true'
         id: cache-npm
         uses: actions/cache@v6
         with:
@@ -35,9 +75,10 @@ jobs:
 
       - name: 安装依赖
         run: npm run install
-        if: ${{ steps.cache-npm.outputs.cache-hit != 'true' }}
+        if: ${{ steps.gate.outputs.run == 'true' && steps.cache-npm.outputs.cache-hit != 'true' }}
 
       - name: 执行签到
+        if: steps.gate.outputs.run == 'true'
         run: npm run main
         env:
           USERINFO: ${{ secrets.USERINFO }}
